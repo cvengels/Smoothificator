@@ -49,16 +49,16 @@ def get_min_layer_height(gcode_lines):
                 return float(match.group(1))
     return None
 
-def process_gcode(input_file, outer_layer_height=None):
+def process_gcode(input_file, outer_layer_height=None , skip_first_layer=True):
     current_layer = 0
     current_z = 0.0
     current_layer_height = 0.0
     in_external_perimeter = False
-    external_block_lines = []
     
     logging.info("Starting G-code processing")
     logging.info(f"Input file: {input_file}")
-    logging.info(f"Desired outer wall height: {outer_layer_height}mm")
+    logging.info(f"Desired outer wall height: {outer_layer_height+'mm' if outer_layer_height is not None else 'Not set'}")
+    logging.info(f"Skipping first layer: {'Yes' if skip_first_layer else 'No'}")
 
     # Read the input G-code
     with open(input_file, 'r') as infile:
@@ -87,6 +87,7 @@ def process_gcode(input_file, outer_layer_height=None):
         # Detect layer changes and get layer height
         if ";LAYER_CHANGE" in line:
             current_layer += 1
+            
             # Look ahead for HEIGHT marker
             for j in range(i + 1, min(i + 5, len(lines))):
                 if ";HEIGHT:" in lines[j]:
@@ -95,6 +96,7 @@ def process_gcode(input_file, outer_layer_height=None):
                         current_layer_height = float(height_match.group(1))
                         logging.info(f"Layer {current_layer} detected with height={current_layer_height:.3f}")
                         break
+            
             modified_lines.append(line)
             i += 1
             continue
@@ -123,7 +125,8 @@ def process_gcode(input_file, outer_layer_height=None):
 
             # Process the collected block
             if external_block_lines:
-                if current_layer_height > outer_layer_height:
+                # Check if option to skip the first layer is set
+                if current_layer_height > outer_layer_height and not (skip_first_layer and current_layer == 1):
                     # Calculate both ceiling and floor passes
                     passes_ceil = math.ceil(current_layer_height / outer_layer_height)
                     passes_floor = math.floor(current_layer_height / outer_layer_height)
@@ -225,7 +228,8 @@ if __name__ == "__main__":
     parser.add_argument('input_file', help='Input G-code file')
     parser.add_argument('-outerLayerHeight', '--outer-layer-height', type=float,
                        help='Desired height for outer walls (mm). If not provided, will use min_layer_height from G-code')
+    parser.add_argument('--no-skip', default=True, action='store_false', help='Skip processing the first layer for better bed adhesion (on by default, set flag to disable)')
     
     args = parser.parse_args()
-    
-    process_gcode(input_file=args.input_file, outer_layer_height=args.outer_layer_height)
+
+    process_gcode(input_file=args.input_file, outer_layer_height=args.outer_layer_height, skip_first_layer=args.no_skip)
