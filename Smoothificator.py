@@ -39,7 +39,7 @@ def get_layer_height(gcode_lines):
                 return float(match.group(1))
     return None
 
-def process_gcode(input_file, outer_layer_height):
+def process_gcode(input_file, outer_layer_height=None , skip_first_layer=True):
     current_layer = 0
     current_z = 0.0
     in_external_perimeter = False
@@ -47,7 +47,8 @@ def process_gcode(input_file, outer_layer_height):
     
     logging.info("Starting G-code processing")
     logging.info(f"Input file: {input_file}")
-    logging.info(f"Desired outer wall height: {outer_layer_height}mm")
+    logging.info(f"Desired outer wall height: {outer_layer_height+'mm' if outer_layer_height is not None else 'Not set'}")
+    logging.info(f"Skipping first layer: {'Yes' if skip_first_layer else 'No'}")
 
     # Read the input G-code
     with open(input_file, 'r') as infile:
@@ -105,8 +106,8 @@ def process_gcode(input_file, outer_layer_height):
                 external_block_lines.append(current_line)
                 i += 1
 
-            # Process the collected block
-            if external_block_lines:
+            # Process the collected block (Check if option to skip the first layer is set)
+            if external_block_lines and not (skip_first_layer and current_layer == 1):
                 # Find the starting position from the last G1 move before the external perimeter block
                 start_pos = None
                 for j in range(i - len(external_block_lines) - 1, max(0, i - len(external_block_lines) - 10), -1):
@@ -158,7 +159,8 @@ if __name__ == "__main__":
     parser.add_argument('input_file', help='Input G-code file')
     parser.add_argument('-outerLayerHeight', '--outer-layer-height', type=float, required=True,
                        help='Desired height for outer walls (mm)')
+    parser.add_argument('--no-skip', default=True, action='store_false', help='Skip processing the first layer for better bed adhesion (on by default, set flag to disable)')
     
     args = parser.parse_args()
-    
-    process_gcode(input_file=args.input_file, outer_layer_height=args.outer_layer_height)
+
+    process_gcode(input_file=args.input_file, outer_layer_height=args.outer_layer_height, skip_first_layer=args.no_skip)
